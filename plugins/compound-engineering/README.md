@@ -97,6 +97,7 @@ The primary entry points for engineering work, invoked as slash commands. Detail
 | Skill | Description |
 |-------|-------------|
 | [`ce-polish-beta`](../../docs/skills/ce-polish-beta.md) | Human-in-the-loop polish phase after /ce-code-review — verifies review + CI, starts a dev server from `.claude/launch.json`, generates a testable checklist, and dispatches polish sub-agents for fixes. Emits stacked-PR seeds for oversized work |
+| `ce-dogfood-beta` | Diff-scoped browser QA of the active branch: builds an exhaustive test matrix of every change, drives the app with agent-browser, then auto-fixes issues, adds regression tests, and commits each fix until green |
 | `/lfg` | Full autonomous engineering workflow |
 
 ## Agents
