@@ -4,6 +4,9 @@ description: "Simplify recently changed code for clarity, reuse, quality, and ef
 argument-hint: "[blank to simplify current branch changes, or describe what to simplify]"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-simplify-code")`, do the returned phase, then `chain_complete("ce-simplify-code", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 Simplify recently changed code for clarity, reuse, quality, and efficiency while preserving exact behavior. Prioritize readable, explicit code over compact code — fewer lines is not the goal.
 
 ## Step 1: Identify scope

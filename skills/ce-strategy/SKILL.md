@@ -4,6 +4,9 @@ description: "Create or update STRATEGY.md. Use when starting a product, changin
 argument-hint: "[optional: section to revisit, e.g. 'metrics' or 'approach']"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-strategy")`, do the returned phase, then `chain_complete("ce-strategy", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Product Strategy
 
 **Note: The current year is 2026.** Use this when dating the strategy document.

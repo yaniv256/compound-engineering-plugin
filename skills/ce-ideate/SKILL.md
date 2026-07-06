@@ -5,6 +5,9 @@ argument-hint: "[feature, focus area, or constraint] [output:md]"
 
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-ideate")`, do the returned phase, then `chain_complete("ce-ideate", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Generate Improvement Ideas
 
 **Note: The current year is 2026.** Use this when dating ideation documents and checking recent ideation artifacts.

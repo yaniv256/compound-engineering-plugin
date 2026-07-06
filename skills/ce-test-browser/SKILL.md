@@ -4,6 +4,9 @@ description: Run browser tests for pages affected by the current branch or PR.
 argument-hint: "[PR number, branch name, 'current', or --port PORT]"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-test-browser")`, do the returned phase, then `chain_complete("ce-test-browser", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Browser Test Skill
 
 Run end-to-end browser tests on pages affected by a PR or branch changes using the `agent-browser` CLI.

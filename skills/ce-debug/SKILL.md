@@ -4,6 +4,9 @@ description: 'Diagnosis loop for bugs and failing behavior. Use for errors, stac
 argument-hint: "[issue reference, error message, test path, or description of broken behavior]"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-debug")`, do the returned phase, then `chain_complete("ce-debug", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Debug and Fix
 
 Find root causes, then fix them. This skill investigates bugs systematically — tracing the full causal chain before proposing a fix — and optionally implements the fix with test-first discipline.
