@@ -4,6 +4,9 @@ description: Document a recently solved problem or durable project vocabulary in
 argument-hint: "[optional: brief context] [mode:headless] "
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-compound")`, do the returned phase, then `chain_complete("ce-compound", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # /ce-compound
 
 Coordinate multiple subagents working in parallel to document a recently solved problem.

@@ -5,6 +5,9 @@ disable-model-invocation: true
 argument-hint: "[optional: what shipped and/or channels, e.g. 'a tweet thread and a LinkedIn post']"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-promote")`, do the returned phase, then `chain_complete("ce-promote", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # /ce-promote
 
 Turn a feature that just shipped into copy-pasteable, user-facing announcement copy — right inside the engineering workflow.

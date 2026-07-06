@@ -14,6 +14,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-sweep")`, do the returned phase, then `chain_complete("ce-sweep", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Feedback Sweep
 
 `ce-sweep` sweeps every configured feedback source for items posted since the last run: it acknowledges each at its source, analyzes any attached recordings, verifies claimed fixes actually merged to the default branch, and folds the open items into a rolling `/lfg`-ready plan. The deterministic state engine (`scripts/sweep-state.py`) is the **only** writer of sweep state; this skill drives it through its subcommands and never hand-edits the state file. Read `references/state-schema.md` for the state contract (statuses, lease semantics, status words) before touching state.

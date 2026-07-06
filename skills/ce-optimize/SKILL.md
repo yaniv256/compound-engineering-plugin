@@ -4,6 +4,9 @@ description: "Run metric-driven optimization loops. Use when improving measurabl
 argument-hint: "[path to optimization spec YAML, or describe the optimization goal]"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-optimize")`, do the returned phase, then `chain_complete("ce-optimize", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Iterative Optimization Loop
 
 Run metric-driven iterative optimization. Define a goal, build measurement scaffolding, then run parallel experiments that converge toward the best solution.

@@ -4,6 +4,9 @@ description: "Give a decisive, project-grounded verdict on an external input —
 argument-hint: "[the external thing to judge, plus any links] — or invoke bare mid-session for a second opinion"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-pov")`, do the returned phase, then `chain_complete("ce-pov", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Form a Point of View
 
 Return a decisive, **graded verdict** on something from the outside world — judged against *this project*, not in the abstract.

@@ -4,6 +4,9 @@ description: Execute a plan or concrete work prompt end-to-end. Use when impleme
 argument-hint: "[Plan doc path or description of work. Blank to auto use latest plan doc]"
 ---
 
+<!-- chained-prompts-redirect -->
+> **If the `chained-prompts` MCP is available, run this skill as a chained-prompt instead of executing these phases inline.** It is the superior mode: it serves the phases one at a time and will not let you skip ahead. Start with `chain_start("ce-work")`, do the returned phase, then `chain_complete("ce-work", "<phase>")` to get the next — repeat to the end. If `chained-prompts` is not available, run the phases below inline.
+
 # Work Execution Command
 
 Execute work efficiently while maintaining quality and finishing features.
