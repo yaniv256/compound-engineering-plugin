@@ -41,7 +41,7 @@ bash "$SKILL_DIR/scripts/cross-model-adversarial-review.sh" "<peer>" "<base-ref>
 
 - `<peer>` = `XPEER` from Step 1 (`codex` or `claude`).
 - `<base-ref>` = the Stage 1 `BASE` (the diff base the peer reviews via `git diff <base-ref>`).
-- `<run-dir>` = the Stage 4 run dir (`/tmp/compound-engineering/ce-code-review/<run-id>/`). The script writes `adversarial-<peer>.json` there.
+- `<run-dir>` = the resolved owner-scoped Stage 4 run dir. The script writes `adversarial-<peer>.json` there.
 
 Set the Bash tool `timeout` to `660000` (11 min) — the script self-bounds (codex idle-timeout, default-180s stall with reasoning forced on for liveness; hard backstop `CROSS_MODEL_HARD_SECS`, default 600s) and exits cleanly. If the harness can't background a shell command, run it inline before awaiting the reviewers; correctness is unaffected, only wall-clock. The script needs no prompt or schema passed in — it reads the persona brief and `findings-schema.json` itself from the skill dir.
 

@@ -25,8 +25,13 @@ Never read from the cache — recompute every run:
 ## Cache location & key
 
 ```
-/tmp/compound-engineering/repo-profile/<root-sha>/<head-sha>.json
+/tmp/compound-engineering-<uid>/repo-profile/<root-sha>/<head-sha>.json
 ```
+
+The UID-scoped root keeps the stable, inspectable `/tmp` location while
+preventing one Unix user from owning the cache directory needed by another.
+Set `COMPOUND_ENGINEERING_SCRATCH_ROOT` to override the complete per-user
+scratch root, or `COMPOUND_ENGINEERING_CACHE_ROOT` to override only this cache.
 
 - `<root-sha>` = lexicographically-first `git rev-list --max-parents=0 HEAD` — the repo identity (stable, shared across worktrees and clones).
 - `<head-sha>` = `git rev-parse HEAD` — the working state.
