@@ -59,6 +59,20 @@ describe("ce-compound non-interactive depth contract", () => {
     expect(skill.match(/Documentation complete \(headless lightweight mode\)/g)).toHaveLength(1)
   })
 
+  test("checks docs/solutions discoverability before reporting lightweight status", () => {
+    const lightweightStart = skill.indexOf("### Lightweight Mode")
+    const successOutputStart = skill.indexOf("## Success Output")
+    const lightweightSection = skill.slice(lightweightStart, successOutputStart)
+    const checkStart = lightweightSection.indexOf("Read-only discoverability check")
+    const reportStart = lightweightSection.indexOf("Lightweight completion output")
+
+    expect(checkStart).toBeGreaterThan(-1)
+    expect(reportStart).toBeGreaterThan(checkStart)
+    expect(lightweightSection).toMatch(
+      /Read-only discoverability check[\s\S]+docs\/solutions\/[\s\S]+never edits instruction files/i,
+    )
+  })
+
   test("describes Lightweight as reduced coverage without bounded-cost claims", () => {
     expect(skill).toContain("Single-pass alternative — same artifact type, reduced research and validation.")
     expect(skill).not.toContain("Single-pass alternative — same documentation, fewer tokens.")
