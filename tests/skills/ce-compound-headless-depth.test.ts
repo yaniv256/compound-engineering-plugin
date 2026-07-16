@@ -84,6 +84,22 @@ describe("ce-compound non-interactive depth contract", () => {
     )
   })
 
+  test("validates lightweight frontmatter parser safety before reporting success", () => {
+    const lightweightStart = skill.indexOf("### Lightweight Mode")
+    const successOutputStart = skill.indexOf("## Success Output")
+    const lightweightSection = skill.slice(lightweightStart, successOutputStart)
+    const writeStep = lightweightSection.indexOf("**Write minimal doc**")
+    const parserSafetyStep = lightweightSection.indexOf("**Frontmatter parser-safety check**")
+    const completionOutput = lightweightSection.indexOf("**Lightweight completion output:**")
+
+    expect(writeStep).toBeGreaterThan(-1)
+    expect(parserSafetyStep).toBeGreaterThan(writeStep)
+    expect(completionOutput).toBeGreaterThan(parserSafetyStep)
+    expect(lightweightSection).toMatch(
+      /Frontmatter parser-safety check[^\n]+Phase 2 step 8[^\n]+bundled-script existence guard and manual fallback checklist/i,
+    )
+  })
+
   test("describes Lightweight as reduced coverage without bounded-cost claims", () => {
     expect(skill).toContain("Single-pass alternative — same artifact type, reduced research and validation.")
     expect(skill).not.toContain("Single-pass alternative — same documentation, fewer tokens.")

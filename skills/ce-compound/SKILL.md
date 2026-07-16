@@ -511,7 +511,8 @@ The orchestrator (main conversation) performs ALL of the following in one sequen
    - `gap noted — instruction-file tip emitted` when active project instructions exist but do not surface it
    - `not applicable — no active project instructions` when no project instructions are active; emit no discoverability tip
 6. **Mechanical claims check**: run `scripts/validate-doc-claims.py` against the written doc exactly as in Phase 2.45 step 1 (same `SKILL_DIR` anchor, same adjudicate-not-auto-fix rule — read `references/grounding-validation.md` for the adjudication table when it flags anything). Lightweight skips only the semantic validator subagent, not this deterministic check.
-7. **Skip specialized agent reviews** (Phase 3) and the semantic grounding validator (Phase 2.45 step 2) to conserve context
+7. **Frontmatter parser-safety check**: validate the written doc exactly as in Phase 2 step 8, using the same bundled-script existence guard and manual fallback checklist. Fix any violation and repeat the check; do not report success until the written frontmatter is parser-safe.
+8. **Skip specialized agent reviews** (Phase 3) and the semantic grounding validator (Phase 2.45 step 2) to conserve context
 
 **Lightweight completion output:** In headless Lightweight, do not emit this interactive block; use the depth-specific report under `Success Output` > `Headless mode` instead. In interactive Lightweight, emit:
 ```
