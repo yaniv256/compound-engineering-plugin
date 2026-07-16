@@ -114,6 +114,30 @@ describe("ce-compound non-interactive depth contract", () => {
     )
   })
 
+  test("guards lightweight writes against exact target-path collisions", () => {
+    const lightweightStart = skill.indexOf("### Lightweight Mode")
+    const successOutputStart = skill.indexOf("## Success Output")
+    const lightweightSection = skill.slice(lightweightStart, successOutputStart)
+    const writeStep = lightweightSection.indexOf("**Write minimal doc**")
+    const collisionGuard = lightweightSection.indexOf(
+      "check whether the exact proposed `docs/solutions/[category]/[filename].md` path exists",
+    )
+    const claimsCheck = lightweightSection.indexOf("**Mechanical claims check**")
+
+    expect(writeStep).toBeGreaterThan(-1)
+    expect(collisionGuard).toBeGreaterThan(writeStep)
+    expect(claimsCheck).toBeGreaterThan(collisionGuard)
+    expect(lightweightSection).toMatch(
+      /If it exists, read it: update it only when it covers the same problem, preserving its path and frontmatter structure and adding `last_updated: YYYY-MM-DD`/i,
+    )
+    expect(lightweightSection).toMatch(
+      /otherwise choose a distinct, descriptive filename and re-check that exact path is absent before writing/i,
+    )
+    expect(lightweightSection).toContain(
+      "This is exact-path collision handling only — do not run Full mode's semantic overlap research or dispatch subagents.",
+    )
+  })
+
   test("describes Lightweight as reduced coverage without bounded-cost claims", () => {
     expect(skill).toContain("Single-pass alternative — same artifact type, reduced research and validation.")
     expect(skill).not.toContain("Single-pass alternative — same documentation, fewer tokens.")
