@@ -84,6 +84,20 @@ describe("ce-compound non-interactive depth contract", () => {
     )
   })
 
+  test("carries CONCEPTS.md discoverability into the headless Lightweight report", () => {
+    const reportStart = skill.indexOf("For `depth:lightweight`, use this lower-overhead report")
+    const fullReportStart = skill.indexOf(
+      "For `depth:full` or backward-compatible headless calls",
+    )
+    const lightweightReport = skill.slice(reportStart, fullReportStart)
+
+    expect(reportStart).toBeGreaterThan(-1)
+    expect(fullReportStart).toBeGreaterThan(reportStart)
+    expect(lightweightReport).toContain(
+      "CONCEPTS.md discoverability: <not checked — CONCEPTS.md not refined | no gap | gap noted — instruction-file tip emitted | not applicable — no active project instructions>",
+    )
+  })
+
   test("validates lightweight frontmatter parser safety before reporting success", () => {
     const lightweightStart = skill.indexOf("### Lightweight Mode")
     const successOutputStart = skill.indexOf("## Success Output")
