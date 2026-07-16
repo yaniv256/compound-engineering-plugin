@@ -21,7 +21,7 @@ Captures problem solutions while context is fresh, creating structured documenta
 /ce-compound [brief context]            # Provide additional context hint
 /ce-compound mode:headless              # Non-interactive run for automations
 /ce-compound mode:headless [context]    # Non-interactive run with context hint
-/ce-compound mode:headless depth:lightweight [context] # Fast non-interactive run
+/ce-compound mode:headless depth:lightweight [context] # Lower-overhead non-interactive run
 /ce-compound mode:headless depth:full [context]        # Full non-interactive run
 ```
 
@@ -79,7 +79,7 @@ When spawning subagents, pass the relevant file contents into the task prompt so
 
 **In headless mode**, skip automatic mode selection. Run the depth selected during Mode Detection: `depth:lightweight` enters Lightweight Mode; `depth:full` or no depth token enters Full Mode, including the automatic session-history probe (Phase 1 step 4).
 
-**Session history — an automatic probe in Full mode, never a question.** The point of searching prior sessions is that an *unrelated* earlier session may hold related problem-solving; neither the agent nor the user can know that a priori, so asking is pointless. Instead, Full mode always runs the cheap discovery+metadata probe (Phase 1 step 4) — it runs in parallel with the research subagents, so it is near-free on wall-clock — and escalates to the expensive extraction+synthesis only when the probe surfaces genuinely relevant candidate sessions. Lightweight mode skips session history entirely; headless runs the same automatic probe, since it prompts for nothing and so keeps headless non-interactive. This support exists only inside the compounding workflow; there is no standalone session-history product surface.
+**Session history — an automatic probe in Full mode, never a question.** The point of searching prior sessions is that an *unrelated* earlier session may hold related problem-solving; neither the agent nor the user can know that a priori, so asking is pointless. Instead, Full mode always runs the cheap discovery+metadata probe (Phase 1 step 4) — it runs in parallel with the research subagents, so it is near-free on wall-clock — and escalates to the expensive extraction+synthesis only when the probe surfaces genuinely relevant candidate sessions. Lightweight mode skips session history entirely; headless Full runs the same automatic probe, since it prompts for nothing and so keeps headless non-interactive. This support exists only inside the compounding workflow; there is no standalone session-history product surface.
 
 ---
 
@@ -490,9 +490,9 @@ Based on problem type, optionally dispatch generic subagents seeded with local p
 ### Lightweight Mode
 
 <critical_requirement>
-**Single-pass alternative — same documentation, fewer tokens.**
+**Single-pass alternative — same artifact type, reduced research and validation.**
 
-This mode skips parallel subagents entirely. The orchestrator performs all work in a single pass, producing the same solution document without cross-referencing or duplicate detection.
+This mode skips parallel subagents entirely. The orchestrator performs all work in a single pass and writes the same solution-doc artifact type, but omits cross-referencing, duplicate detection, session-history research, and semantic grounding validation.
 
 Headless mode enters Lightweight only when explicitly invoked with `depth:lightweight`; otherwise it defaults to Full for backward compatibility.
 </critical_requirement>
@@ -509,7 +509,7 @@ The orchestrator (main conversation) performs ALL of the following in one sequen
 5. **Mechanical claims check**: run `scripts/validate-doc-claims.py` against the written doc exactly as in Phase 2.45 step 1 (same `SKILL_DIR` anchor, same adjudicate-not-auto-fix rule — read `references/grounding-validation.md` for the adjudication table when it flags anything). Lightweight skips only the semantic validator subagent, not this deterministic check.
 6. **Skip specialized agent reviews** (Phase 3) and the semantic grounding validator (Phase 2.45 step 2) to conserve context
 
-**Lightweight output:**
+**Lightweight completion output:** In headless Lightweight, do not emit this interactive block; use the depth-specific report under `Success Output` > `Headless mode` instead. In interactive Lightweight, emit:
 ```
 ✓ Documentation complete (lightweight mode)
 
@@ -606,7 +606,7 @@ Knowledge track:
 
 Emit a structured terminal report and end the turn. No "What's next?" question, no blocking prompt. End with `Documentation complete` as the terminal signal so callers can detect completion.
 
-For `depth:lightweight`, use this bounded report after the Lightweight Mode workflow:
+For `depth:lightweight`, use this lower-overhead report after the Lightweight Mode workflow:
 
 ```
 ✓ Documentation complete (headless lightweight mode)

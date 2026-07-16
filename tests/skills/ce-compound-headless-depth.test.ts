@@ -44,4 +44,24 @@ describe("ce-compound non-interactive depth contract", () => {
     expect(skill).toContain("Semantic grounding validator (Full mode, including headless Full; lightweight skips it)")
     expect(skill).not.toContain("Semantic grounding validator (Full and headless; lightweight skips it)")
   })
+
+  test("scopes the automatic session-history probe to Full runs", () => {
+    expect(skill).toMatch(/Lightweight mode skips session history entirely; headless Full runs the same automatic probe/i)
+    expect(skill).not.toMatch(/Lightweight mode skips session history entirely; headless runs the same automatic probe/i)
+  })
+
+  test("routes headless Lightweight past the interactive completion block", () => {
+    const lightweightStart = skill.indexOf("### Lightweight Mode")
+    const successOutputStart = skill.indexOf("## Success Output")
+    const lightweightSection = skill.slice(lightweightStart, successOutputStart)
+
+    expect(lightweightSection).toMatch(/In headless Lightweight, do not emit this interactive block[^\n]+Headless mode/i)
+    expect(skill.match(/Documentation complete \(headless lightweight mode\)/g)).toHaveLength(1)
+  })
+
+  test("describes Lightweight as reduced coverage without bounded-cost claims", () => {
+    expect(skill).toContain("Single-pass alternative — same artifact type, reduced research and validation.")
+    expect(skill).not.toContain("Single-pass alternative — same documentation, fewer tokens.")
+    expect(skill).not.toContain("use this bounded report")
+  })
 })
