@@ -12,11 +12,13 @@ or matching supervisor remains.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import hmac
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import stat
@@ -34,11 +36,141 @@ TOKEN_ENV = "CE_TEST_BROWSER_SERVER_TOKEN"
 TEST_ACK_DELAY_ENV = "CE_TEST_BROWSER_TEST_ACK_DELAY_SECS"
 TEST_PRE_LEASE_DELAY_ENV = "CE_TEST_BROWSER_TEST_PRE_LEASE_DELAY_SECS"
 TEST_FORCE_PS_IDENTITY_ENV = "CE_TEST_BROWSER_TEST_FORCE_PS_IDENTITY"
+TEST_PS_EMPTY_PID_ENV = "CE_TEST_BROWSER_TEST_PS_EMPTY_PID"
+TEST_PS_ERROR_PID_ENV = "CE_TEST_BROWSER_TEST_PS_ERROR_PID"
+TEST_PS_MALFORMED_PID_ENV = "CE_TEST_BROWSER_TEST_PS_MALFORMED_PID"
+TEST_PS_BAD_LSTART_PID_ENV = "CE_TEST_BROWSER_TEST_PS_BAD_LSTART_PID"
+TEST_PS_BAD_STATE_PID_ENV = "CE_TEST_BROWSER_TEST_PS_BAD_STATE_PID"
+TEST_PS_GLOBAL_WARNING_ENV = "CE_TEST_BROWSER_TEST_PS_GLOBAL_WARNING"
 O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+TRUSTED_PS_PATHS = (Path("/usr/bin/ps"), Path("/bin/ps"))
 
 
 class SupervisorError(RuntimeError):
     pass
+
+
+def _run_ps(*args: str, allow_missing_pid: bool = False) -> str:
+    executable = next(
+        (
+            candidate
+            for candidate in TRUSTED_PS_PATHS
+            if candidate.is_file() and os.access(candidate, os.X_OK)
+        ),
+        None,
+    )
+    if executable is None:
+        raise SupervisorError("trusted ps executable is unavailable; retaining recovery state")
+    stable_environment = {
+        **os.environ,
+        "TZ": "UTC",
+        "LC_ALL": "C",
+        "LANG": "C",
+    }
+    try:
+        result = subprocess.run(
+            [str(executable), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=stable_environment,
+        )
+    except OSError as exc:
+        raise SupervisorError(
+            f"ps verification is unavailable; retaining recovery state: {exc}"
+        ) from exc
+    pid: int | None = None
+    try:
+        pid_index = args.index("-p")
+        pid = int(args[pid_index + 1])
+        if pid <= 0:
+            pid = None
+    except (ValueError, IndexError):
+        pass
+    returncode = result.returncode
+    stdout = result.stdout
+    stderr = result.stderr
+    if (
+        os.environ.get(TEST_PS_EMPTY_PID_ENV)
+        and pid is not None
+        and str(pid) == os.environ[TEST_PS_EMPTY_PID_ENV]
+    ):
+        stdout = ""
+    if (
+        os.environ.get(TEST_PS_ERROR_PID_ENV)
+        and pid is not None
+        and str(pid) == os.environ[TEST_PS_ERROR_PID_ENV]
+    ):
+        returncode = 1
+        stdout = ""
+        stderr = "simulated-per-pid-failure"
+    if (
+        os.environ.get(TEST_PS_MALFORMED_PID_ENV)
+        and pid is not None
+        and str(pid) == os.environ[TEST_PS_MALFORMED_PID_ENV]
+        and "lstart=" in args
+    ):
+        returncode = 0
+        stdout = "not-a-start-time\n"
+        stderr = "simulated-warning"
+    if (
+        os.environ.get(TEST_PS_BAD_LSTART_PID_ENV)
+        and pid is not None
+        and str(pid) == os.environ[TEST_PS_BAD_LSTART_PID_ENV]
+        and "lstart=" in args
+    ):
+        returncode = 0
+        stdout = "not-a-start-time\n"
+        stderr = ""
+    if (
+        os.environ.get(TEST_PS_BAD_STATE_PID_ENV)
+        and pid is not None
+        and str(pid) == os.environ[TEST_PS_BAD_STATE_PID_ENV]
+        and "state=" in args
+    ):
+        returncode = 0
+        stdout = "not-a-state\n"
+        stderr = ""
+    if os.environ.get(TEST_PS_GLOBAL_WARNING_ENV) and args == (
+        "-eo",
+        "pid=,pgid=,stat=",
+    ):
+        stderr = "simulated warning: incomplete data"
+    if stderr.strip():
+        raise SupervisorError(
+            f"ps verification emitted stderr; retaining recovery state: {stderr.strip()}"
+        )
+    if (
+        returncode == 1
+        and allow_missing_pid
+        and not stdout.strip()
+        and not stderr.strip()
+    ):
+        if pid is None:
+            raise SupervisorError(
+                "ps returned an ambiguous missing-PID result; retaining recovery state"
+            )
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return ""
+        except OSError as exc:
+            raise SupervisorError(
+                f"cannot verify whether PID {pid} disappeared; retaining recovery state: {exc}"
+            ) from exc
+        raise SupervisorError(
+            f"ps omitted live PID {pid}; retaining recovery state"
+        )
+    if returncode != 0:
+        detail = stderr.strip() or f"exit {returncode}"
+        raise SupervisorError(
+            f"ps verification failed; retaining recovery state: {detail}"
+        )
+    if allow_missing_pid and pid is not None and not stdout.strip():
+        raise SupervisorError(
+            f"ps returned empty output for live PID {pid}; retaining recovery state"
+        )
+    return stdout
 
 
 def _test_delay(name: str) -> None:
@@ -130,16 +262,20 @@ def _pid_running(pid: int) -> bool:
         return False
     except OSError:
         return True
-    try:
-        state = subprocess.run(
-            ["ps", "-o", "state=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.strip()
-    except OSError:
-        return True
-    return bool(state) and not state.startswith("Z")
+    state = _run_ps(
+        "-o", "state=", "-p", str(pid), allow_missing_pid=True
+    ).strip()
+    if not state:
+        return False
+    _validate_ps_state(state)
+    return not state.startswith("Z")
+
+
+def _validate_ps_state(value: str) -> None:
+    if not re.fullmatch(r"[A-Za-z][<NLsl+]*", value):
+        raise SupervisorError(
+            f"ps returned a malformed process state; retaining recovery state: {value!r}"
+        )
 
 
 def _proc_process_identity(pid: int) -> str | None:
@@ -154,23 +290,33 @@ def _proc_process_identity(pid: int) -> str | None:
 
 
 def _ps_process_identity(pid: int) -> str | None:
-    stable_environment = {
-        **os.environ,
-        "TZ": "UTC",
-        "LC_ALL": "C",
-        "LANG": "C",
-    }
-    try:
-        started = subprocess.run(
-            ["ps", "-o", "lstart=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=stable_environment,
-        ).stdout.strip()
-    except OSError:
+    started = _run_ps(
+        "-o", "lstart=", "-p", str(pid), allow_missing_pid=True
+    ).strip()
+    if not started:
         return None
-    return f"ps-start:{started}" if started else None
+    shape = re.fullmatch(
+        r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun) "
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +"
+        r"([1-9]|[12][0-9]|3[01]) "
+        r"([0-2][0-9]:[0-5][0-9]:[0-6][0-9]) ([0-9]{4})",
+        started,
+    )
+    if shape is None:
+        raise SupervisorError(
+            f"ps returned a malformed C/UTC start time; retaining recovery state: {started!r}"
+        )
+    try:
+        parsed = datetime.strptime(started, "%a %b %d %H:%M:%S %Y")
+    except ValueError as exc:
+        raise SupervisorError(
+            f"ps returned a malformed C/UTC start time; retaining recovery state: {started!r}"
+        ) from exc
+    if parsed.strftime("%a") != shape.group(1):
+        raise SupervisorError(
+            f"ps returned an inconsistent C/UTC start time; retaining recovery state: {started!r}"
+        )
+    return f"ps-start:{started}"
 
 
 def _process_identity(pid: int, source: str | None = None) -> str | None:
@@ -201,44 +347,56 @@ def _process_has_token(pid: int, token: str) -> bool:
     needle = f"{TOKEN_ENV}={token}"
     proc_root = Path("/proc")
     if proc_root.is_dir():
+        proc_dir = proc_root / str(pid)
         try:
-            data = (proc_root / str(pid) / "environ").read_bytes()
+            if proc_dir.stat().st_uid != os.getuid():
+                return False
+            data = (proc_dir / "environ").read_bytes()
             return needle.encode() in data.split(b"\0")
         except OSError:
             # On multi-UID Linux hosts, foreign /proc entries are intentionally
             # unreadable. Do not fork one `ps` process per foreign PID.
-            return False
-    try:
-        command = subprocess.run(
-            ["ps", "eww", "-p", str(pid), "-o", "command="],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout
-    except OSError:
-        return False
+            if not _pid_running(pid):
+                return False
+            command = _run_ps(
+                "eww",
+                "-p",
+                str(pid),
+                "-o",
+                "command=",
+                allow_missing_pid=True,
+            )
+            return needle in command
+    command = _run_ps(
+        "eww", "-p", str(pid), "-o", "command=", allow_missing_pid=True
+    )
     return needle in command
 
 
 def _process_table() -> list[tuple[int, int, str]]:
-    try:
-        output = subprocess.run(
-            ["ps", "-eo", "pid=,pgid=,stat="],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout
-    except OSError:
-        return []
+    output = _run_ps("-eo", "pid=,pgid=,stat=")
     rows: list[tuple[int, int, str]] = []
     for line in output.splitlines():
         fields = line.split()
-        if len(fields) < 3:
-            continue
+        if len(fields) != 3:
+            raise SupervisorError(
+                "ps returned a malformed process table; retaining recovery state"
+            )
         try:
-            rows.append((int(fields[0]), int(fields[1]), fields[2]))
-        except ValueError:
-            continue
+            pid = int(fields[0])
+            pgid = int(fields[1])
+        except ValueError as exc:
+            raise SupervisorError(
+                "ps returned a malformed process table; retaining recovery state"
+            ) from exc
+        if pid <= 0 or pgid < 0:
+            raise SupervisorError(
+                "ps returned a malformed process table; retaining recovery state"
+            )
+        _validate_ps_state(fields[2])
+        rows.append((pid, pgid, fields[2]))
+    if not rows:
+        raise SupervisorError("ps returned an empty process table; retaining recovery state")
     return rows
 
 
@@ -650,6 +808,11 @@ def cmd_stop(args: argparse.Namespace) -> int:
     lease = _lease(run_dir)
     if not hmac.compare_digest(lease["token"], args.token):
         raise SupervisorError("token mismatch; refusing to signal or remove anything")
+
+    # Prove the trusted process inventory is available and structurally valid
+    # before sending the first signal. A warned or partial snapshot must leave
+    # the authenticated recovery tree completely untouched.
+    _process_table()
 
     supervisor_signaled = False
     if _pid_matches(lease["supervisor_pid"], lease["supervisor_identity"]):

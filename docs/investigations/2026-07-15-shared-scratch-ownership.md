@@ -345,3 +345,56 @@ with the same seven clean-upstream baseline failures. Release metadata, strict
 plugin manifests, Python compilation, shell parsing, and diff whitespace gates
 remain green. Final5 is superseded; closure requires a new exact-index final6
 bundle and an explicit disposition against that bundle.
+
+Final6 then exposed a verification-availability boundary. Starting with a
+forced `ps-start` lease and invoking stop from an absolute Python path with a
+caller `PATH` that contained no tools made every relative `ps` execution fail.
+The helper converted the missing birth lookup to `False` and the missing process
+table to `[]`, then reported successful removal while the supervisor, wrapper,
+and child all remained alive. A generic READY message that omitted this probe
+was superseded by the concrete three-process reproduction. The helper now
+resolves `ps` only from trusted system paths (`/usr/bin/ps` or `/bin/ps`), uses
+the same normalized environment for every call, and raises on unavailable,
+nonzero, empty, or malformed global process-table verification. Only a fixed-
+argument per-PID query may treat exit 1 with no output as a process that vanished
+between `kill(pid, 0)` and the lookup; global inability to prove the tree empty
+always retains recovery state. Linux token inspection skips foreign UIDs,
+reads same-UID `/proc/<pid>/environ`, and falls back to the trusted absolute
+`ps` path when a live same-UID process blocks that read. The regression launches
+the full three-process tree normally, invokes stop from an absolute Python
+executable with `PATH=/definitely/no-tools`, and proves trusted cleanup signals
+the supervisor, removes all observed PIDs, and only then deletes the exact run.
+PR #1158 was opened after the earlier READY but before this later specific
+finding arrived; it was immediately converted to draft and remains unmergeable
+until a superseding reviewed bundle is green.
+
+Final7 then exposed an ambiguity inside fixed per-PID verification. Exit 1 with
+empty output can mean that a PID disappeared between the preceding liveness
+probe and `ps`; exit 0 with empty output is not evidence of disappearance.
+Tomas held the authenticated supervisor in `SIGSTOP`, injected only the latter
+result for its trusted per-PID query, and reproduced successful run deletion
+while that supervisor remained alive. A second probe showed that exit 1 with a
+real stderr diagnostic was also being accepted as disappearance. The helper now
+accepts exit 1 plus empty output only when stderr is also empty and a second
+`kill(pid, 0)` raises `ProcessLookupError`. A live or indeterminate PID fails
+closed. Exit 0 plus empty output and every stderr-bearing result always fail
+closed and retain the exact run. The regression leaves the global process table
+valid, exercises both ambiguous responses, requires stop to return nonzero
+without signaling any process or deleting the run, then proves a normal
+authenticated stop can recover the complete tree.
+
+Final8 exposed the last implicit trust in a zero exit status. A trusted absolute
+`ps` returning nonempty stderr was still accepted when its exit code was zero,
+and arbitrary nonempty `lstart` text was accepted as a birth identity. A warned,
+malformed per-PID response could therefore become an ordinary identity mismatch
+and repeat the survivor-plus-deleted-run failure. Every `ps` call now rejects
+nonempty stderr regardless of exit code. Fixed-shape outputs are parsed before
+use: per-PID state must match the process-state grammar; normalized C/UTC
+`lstart` must parse as `%a %b %d %H:%M:%S %Y`; and global process-table rows
+must contain exactly positive PID, positive PGID, and a valid state. The exact
+regression injects rc=0, malformed nonempty `lstart`, and stderr for only the
+stopped supervisor while global verification stays valid. Stop must fail closed,
+retain the run, and leave the full tree untouched before normal recovery.
+Stop also preflights one complete global process snapshot before its first
+signal, so a warned or partial inventory cannot begin teardown and then strand
+a half-signaled recovery tree.

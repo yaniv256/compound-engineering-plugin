@@ -26,6 +26,9 @@ const RESOLVER = path.join(
   "scripts",
   "scratch-root.py",
 )
+const PYTHON = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], {
+  encoding: "utf8",
+}).stdout.trim()
 
 function isolatedEnv(root: string): NodeJS.ProcessEnv {
   return {
@@ -55,7 +58,7 @@ function supervisor(
   args: string[],
   env: NodeJS.ProcessEnv = {},
 ): ReturnType<typeof spawnSync> {
-  return spawnSync("python3", [SCRIPT, ...args], {
+  return spawnSync(PYTHON, [SCRIPT, ...args], {
     encoding: "utf8",
     env: { ...isolatedEnv(root), ...env },
     timeout: 15_000,
@@ -594,6 +597,290 @@ describe("ce-test-browser detached dev-server supervisor", () => {
           "--grace",
           "0.2",
         ])
+      }
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 10_000)
+
+  test("later caller PATH cannot hide ps and make teardown falsely report extinction", () => {
+    const root = makeRoot()
+    const run = makeRun(root, "trusted-ps-path")
+    const wrapper = [
+      "import subprocess,time",
+      "subprocess.Popen(['sleep','300'])",
+      "time.sleep(300)",
+    ].join("; ")
+    let token = ""
+    let processIds: number[] = []
+
+    try {
+      const started = supervisor(
+        root,
+        [
+          "start",
+          "--run-dir",
+          run,
+          "--log-file",
+          path.join(run, "server.log"),
+          "--grace",
+          "0.2",
+          "--",
+          "python3",
+          "-c",
+          wrapper,
+        ],
+        { CE_TEST_BROWSER_TEST_FORCE_PS_IDENTITY: "1" },
+      )
+      expect(started.status, started.stderr).toBe(0)
+      const startRecord = JSON.parse(started.stdout)
+      token = startRecord.token
+
+      const before = supervisor(root, [
+        "status",
+        "--run-dir",
+        run,
+        "--token",
+        token,
+      ])
+      expect(before.status, before.stderr).toBe(0)
+      const beforeRecord = JSON.parse(before.stdout)
+      processIds = [startRecord.supervisor_pid, ...beforeRecord.server_processes]
+      expect(processIds.length).toBeGreaterThanOrEqual(3)
+
+      const stopped = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { PATH: "/definitely/no-tools" },
+      )
+      expect(stopped.status, stopped.stderr).toBe(0)
+      expect(JSON.parse(stopped.stdout)).toEqual({
+        removed: true,
+        supervisor_signaled: true,
+      })
+      expect(existsSync(run)).toBe(false)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(false)
+      token = ""
+    } finally {
+      if (token && existsSync(run)) {
+        supervisor(root, [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ])
+      }
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 10_000)
+
+  test("per-PID ps anomalies fail closed while the PID is alive", () => {
+    const root = makeRoot()
+    const run = makeRun(root, "empty-per-pid-ps")
+    const wrapper = [
+      "import subprocess,time",
+      "subprocess.Popen(['sleep','300'])",
+      "time.sleep(300)",
+    ].join("; ")
+    let token = ""
+    let supervisorPid = 0
+    let processIds: number[] = []
+    let supervisorStopped = false
+
+    try {
+      const started = supervisor(
+        root,
+        [
+          "start",
+          "--run-dir",
+          run,
+          "--log-file",
+          path.join(run, "server.log"),
+          "--grace",
+          "0.2",
+          "--",
+          "python3",
+          "-c",
+          wrapper,
+        ],
+        { CE_TEST_BROWSER_TEST_FORCE_PS_IDENTITY: "1" },
+      )
+      expect(started.status, started.stderr).toBe(0)
+      const startRecord = JSON.parse(started.stdout)
+      token = startRecord.token
+      supervisorPid = startRecord.supervisor_pid
+
+      const before = supervisor(root, [
+        "status",
+        "--run-dir",
+        run,
+        "--token",
+        token,
+      ])
+      expect(before.status, before.stderr).toBe(0)
+      const beforeRecord = JSON.parse(before.stdout)
+      processIds = [supervisorPid, ...beforeRecord.server_processes]
+      expect(processIds.length).toBeGreaterThanOrEqual(3)
+
+      process.kill(supervisorPid, "SIGSTOP")
+      supervisorStopped = true
+      expect(waitUntil(() => processAlive(supervisorPid))).toBe(true)
+
+      const rejected = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_EMPTY_PID: String(supervisorPid) },
+      )
+      expect(rejected.status).toBe(1)
+      expect(rejected.stderr).toContain("empty output for live PID")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      const errored = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_ERROR_PID: String(supervisorPid) },
+      )
+      expect(errored.status).toBe(1)
+      expect(errored.stderr).toContain("simulated-per-pid-failure")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      const malformed = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_MALFORMED_PID: String(supervisorPid) },
+      )
+      expect(malformed.status).toBe(1)
+      expect(malformed.stderr).toContain("simulated-warning")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      const badStart = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_BAD_LSTART_PID: String(supervisorPid) },
+      )
+      expect(badStart.status).toBe(1)
+      expect(badStart.stderr).toContain("malformed C/UTC start time")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      const badState = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_BAD_STATE_PID: String(supervisorPid) },
+      )
+      expect(badState.status).toBe(1)
+      expect(badState.stderr).toContain("malformed process state")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      const globalWarning = supervisor(
+        root,
+        [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ],
+        { CE_TEST_BROWSER_TEST_PS_GLOBAL_WARNING: "1" },
+      )
+      expect(globalWarning.status).toBe(1)
+      expect(globalWarning.stderr).toContain("simulated warning: incomplete data")
+      expect(existsSync(run)).toBe(true)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(true)
+
+      process.kill(supervisorPid, "SIGCONT")
+      supervisorStopped = false
+      const stopped = supervisor(root, [
+        "stop",
+        "--run-dir",
+        run,
+        "--token",
+        token,
+        "--grace",
+        "0.2",
+      ])
+      expect(stopped.status, stopped.stderr).toBe(0)
+      expect(existsSync(run)).toBe(false)
+      for (const pid of processIds) expect(processAlive(pid)).toBe(false)
+      token = ""
+    } finally {
+      if (supervisorStopped && supervisorPid) {
+        try {
+          process.kill(supervisorPid, "SIGCONT")
+        } catch {}
+      }
+      if (token && existsSync(run)) {
+        supervisor(root, [
+          "stop",
+          "--run-dir",
+          run,
+          "--token",
+          token,
+          "--grace",
+          "0.2",
+        ])
+      } else if (token) {
+        for (const pid of processIds) {
+          try {
+            if (processAlive(pid)) process.kill(pid, "SIGKILL")
+          } catch {}
+        }
       }
       rmSync(root, { recursive: true, force: true })
     }
